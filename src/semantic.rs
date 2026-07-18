@@ -5,8 +5,11 @@ use model2vec_rs::model::StaticModel;
 
 pub const DIMENSIONS: usize = 256;
 
+#[cfg(feature = "embed-model")]
 static TOKENIZER: &[u8] = include_bytes!("../assets/model/tokenizer.json");
+#[cfg(feature = "embed-model")]
 static MODEL: &[u8] = include_bytes!("../assets/model/model.safetensors");
+#[cfg(feature = "embed-model")]
 static CONFIG: &[u8] = include_bytes!("../assets/model/config.json");
 
 /// Runs the embedded `Model2Vec` query encoder used by semantic retrieval.
@@ -16,9 +19,20 @@ pub struct SemanticEncoder {
 
 impl SemanticEncoder {
 	/// Loads the pretrained potion-base-8M model entirely from executable bytes.
+	#[cfg(feature = "embed-model")]
 	pub(crate) fn open() -> Result<Self> {
 		let model = StaticModel::from_bytes(TOKENIZER, MODEL, CONFIG, None)
 			.context("loading embedded potion-base-8M model")?;
+		Ok(Self { model })
+	}
+
+	/// Loads the pretrained potion-base-8M model from the user cache,
+	/// downloading the pinned revision on first use.
+	#[cfg(all(feature = "fetch-model", not(feature = "embed-model")))]
+	pub(crate) fn open() -> Result<Self> {
+		let files = crate::model_cache::ensure()?;
+		let model = StaticModel::from_bytes(files.tokenizer, files.model, files.config, None)
+			.context("loading cached potion-base-8M model")?;
 		Ok(Self { model })
 	}
 

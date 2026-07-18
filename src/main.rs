@@ -1,10 +1,15 @@
 mod catalog;
 mod category_flags;
 mod cli;
+#[cfg(all(feature = "fetch-model", not(feature = "embed-model")))]
+mod model_cache;
 mod output;
 mod search;
 mod semantic;
 mod tui;
+
+#[cfg(not(any(feature = "fetch-model", feature = "embed-model")))]
+compile_error!("enable the `fetch-model` (default) or `embed-model` feature");
 
 use std::{
 	io::{self, IsTerminal, Write},

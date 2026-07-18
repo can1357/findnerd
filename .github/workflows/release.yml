@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Job-scoped permissions: publish needs the OIDC token, binaries needs release upload.
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Publishes the thin crate (model downloaded on first run) to crates.io via
+  # OIDC trusted publishing — no long-lived registry token.
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches crate version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match crate version $version" >&2
+            exit 1
+          fi
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish to crates.io
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  # Attaches fully offline (embed-model) binaries to the GitHub release.
+  binaries:
+    needs: publish
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build offline binary
+        run: cargo build --release --locked --target ${{ matrix.target }} --no-default-features --features embed-model
+      - name: Package archive
+        shell: bash
+        run: |
+          name="findnerd-$GITHUB_REF_NAME-${{ matrix.target }}"
+          mkdir "$name"
+          cp README.md LICENSE "$name"/
+          cp -R LICENSES "$name"/
+          case "${{ matrix.target }}" in
+            *windows*)
+              cp "target/${{ matrix.target }}/release/findnerd.exe" "$name"/
+              7z a "$name.zip" "$name"
+              ;;
+            *)
+              cp "target/${{ matrix.target }}/release/findnerd" "$name"/
+              tar czf "$name.tar.gz" "$name"
+              ;;
+          esac
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            findnerd-*.tar.gz
+            findnerd-*.zip
