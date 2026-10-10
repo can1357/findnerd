@@ -1,6 +1,7 @@
 mod catalog;
 mod category_flags;
 mod cli;
+mod glyph_image;
 #[cfg(all(feature = "fetch-model", not(feature = "embed-model")))]
 mod model_cache;
 mod output;

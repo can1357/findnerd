@@ -7,6 +7,7 @@ Fast, offline search for Nerd Fonts glyphs from your terminal.
 ## Features
 
 - Interactive search with live previews and keyboard or mouse navigation
+- Large, pixel-sharp glyph preview in terminals with kitty, sixel, or iTerm2 graphics
 - Hybrid ranking across semantic, full-text, and fuzzy-name results
 - Dedicated semantic, BM25, and fuzzy matching modes
 - Filters and category include/exclude controls
@@ -71,6 +72,16 @@ findnerd --interactive folder
 | `F3` / `Ctrl-G` | Cycle category |
 | `Esc` | Clear the query, then quit |
 | `Ctrl-C` / `Ctrl-Q` | Quit |
+
+### Glyph preview
+
+In terminals with a pixel graphics protocol (kitty, Ghostty, WezTerm, foot, iTerm2, and other sixel terminals), the preview panel draws the selected glyph as a large image. findnerd rasterizes it from an installed Nerd Font, preferring `Symbols Nerd Font`, then any family whose name contains `Nerd Font`. Set `FINDNERD_FONT` to a `.ttf` or `.otf` path to use a specific font file. Elsewhere, or until fonts finish loading, the preview shows the glyph as text.
+
+Inside tmux, enable passthrough so graphics reach the outer terminal:
+
+```sh
+tmux set -g allow-passthrough on
+```
 
 ### Ranking modes
 

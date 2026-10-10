@@ -29,7 +29,10 @@ use ratatui::{
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::search::{SearchEngine, SearchMode, SearchRequest, SearchResponse};
+use crate::{
+	glyph_image::GlyphPreview,
+	search::{SearchEngine, SearchMode, SearchRequest, SearchResponse},
+};
 
 const BG: Color = Color::Rgb(10, 13, 20);
 const SURFACE: Color = Color::Rgb(20, 25, 37);
@@ -42,6 +45,8 @@ const AMBER: Color = Color::Rgb(245, 186, 66);
 const GREEN: Color = Color::Rgb(116, 214, 151);
 const RED: Color = Color::Rgb(246, 116, 122);
 const MAX_TUI_RESULTS: usize = 250;
+/// Tallest glyph preview, in rows, when the panel has room to spare.
+const MAX_PREVIEW_ROWS: u16 = 14;
 
 /// Initial state passed from command-line flags into the alternate-screen UI.
 pub struct TuiOptions {
@@ -62,13 +67,14 @@ pub struct Selection {
 /// every exit path.
 pub fn run(engine: SearchEngine, options: TuiOptions) -> Result<Option<Selection>> {
 	let _guard = TerminalGuard::enter()?;
+	let preview = GlyphPreview::detect();
 	let backend = CrosstermBackend::new(io::stdout());
 	let mut terminal =
 		Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Fullscreen })
 			.context("initializing terminal UI")?;
 	terminal.clear().context("clearing alternate buffer")?;
 
-	let mut app = App::new(engine, options)?;
+	let mut app = App::new(engine, options, preview)?;
 	let result = app.run(&mut terminal);
 	terminal.show_cursor().ok();
 	result
@@ -121,11 +127,16 @@ struct App {
 	last_click:          Option<MouseClick>,
 	status:              Option<Status>,
 	selection:           Option<Selection>,
+	preview:             Option<GlyphPreview>,
 	quit:                bool,
 }
 
 impl App {
-	fn new(engine: SearchEngine, options: TuiOptions) -> Result<Self> {
+	fn new(
+		engine: SearchEngine,
+		options: TuiOptions,
+		preview: Option<GlyphPreview>,
+	) -> Result<Self> {
 		let mut app = Self {
 			engine,
 			cursor: options.query.len(),
@@ -140,6 +151,7 @@ impl App {
 			selection: None,
 			results_view: None,
 			last_click: None,
+			preview,
 			quit: false,
 		};
 		app.refresh()?;
@@ -688,7 +700,7 @@ impl App {
 		);
 	}
 
-	fn draw_preview(&self, frame: &mut Frame<'_>, area: Rect) {
+	fn draw_preview(&mut self, frame: &mut Frame<'_>, area: Rect) {
 		let block = panel()
 			.title(Span::styled(" PREVIEW ", Style::default().fg(MUTED).add_modifier(Modifier::BOLD)));
 		let inner = block.inner(area);
@@ -699,26 +711,40 @@ impl App {
 		let hit = self.response.hits[selected];
 		let icon = self.engine.icon(hit.icon);
 		let category = self.engine.category(icon.category);
+		let glyph_rows = if self.preview.is_some() {
+			inner.height.saturating_sub(9).clamp(5, MAX_PREVIEW_ROWS)
+		} else {
+			5
+		};
 		let sections = Layout::default()
 			.direction(Direction::Vertical)
 			.constraints([
-				Constraint::Length(5),
+				Constraint::Length(glyph_rows),
 				Constraint::Length(2),
 				Constraint::Length(3),
 				Constraint::Min(2),
 			])
 			.split(inner);
-		frame.render_widget(
-			Paragraph::new(icon.glyph.as_str())
-				.alignment(Alignment::Center)
-				.style(
-					Style::default()
-						.fg(AMBER)
-						.bg(SURFACE)
-						.add_modifier(Modifier::BOLD),
-				),
-			centered(sections[0], 1),
-		);
+		let rasterized = self.preview.as_mut().is_some_and(|preview| {
+			icon
+				.glyph
+				.chars()
+				.next()
+				.is_some_and(|glyph| preview.render(frame, sections[0], glyph, AMBER, SURFACE))
+		});
+		if !rasterized {
+			frame.render_widget(
+				Paragraph::new(icon.glyph.as_str())
+					.alignment(Alignment::Center)
+					.style(
+						Style::default()
+							.fg(AMBER)
+							.bg(SURFACE)
+							.add_modifier(Modifier::BOLD),
+					),
+				centered(sections[0], 1),
+			);
+		}
 		frame.render_widget(
 			Paragraph::new(icon.name.as_str())
 				.alignment(Alignment::Center)
