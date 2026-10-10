@@ -22,14 +22,18 @@ fetch-model = ["dep:dirs", "dep:sha2", "dep:ureq"]
 embed-model = []
 
 [dependencies]
+ab_glyph = "0.2"
 anyhow = "1.0.98"
 base64 = "0.22.1"
 clap = { version = "4.5.40", features = ["derive"] }
 crossterm = "0.28.1"
 dirs = { version = "6.0.0", optional = true }
+fontdb = "0.23"
 fuzzy-matcher = "0.3.7"
+image = { version = "0.25", default-features = false }
 model2vec-rs = { version = "0.2.1", default-features = false, features = ["local-only", "onig"] }
 ratatui = "0.29.0"
+ratatui-image = { version = "8", default-features = false, features = ["crossterm"] }
 rusqlite = { version = "0.37.0", features = ["bundled", "serialize"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
